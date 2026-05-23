@@ -7,5 +7,17 @@ export type { ThemeResult } from './useTheme.js';
 export { buildZodSchema } from './buildZodSchema.js';
 export { evalJsonLogic } from './safeJsonLogic.js';
 export { FieldRenderer } from './fields/FieldRenderer.js';
-export type { FormSpec, FormPage, FormField, FormFieldBase, FormAccess, FormTheme, FormThankYou, FormSubmitConfig, FormSubmissionPayload, JsonLogicRule, SelectOption, TextField, TextareaField, NumberField, EmailField, PhoneField, SelectField, MultiselectField, CheckboxField, RadioField, DateField, FileField, MatrixField, } from './types.js';
+export { computeCalculations, computeCalculationsSync, invalidateCalcCache } from './calc.js';
+export type { CalcResults } from './calc.js';
+export { computeScore } from './scoring.js';
+export type { ScoreResult } from './scoring.js';
+export { evaluatePageExitActions } from './actions.js';
+export type { PageExitResult } from './actions.js';
+export { FormLogicProvider, FormLogicContext, useFormLogic } from './FormLogicContext.js';
+export type { FormLogicState, FormLogicProviderProps } from './FormLogicContext.js';
+export { CalcDisplay } from './CalcDisplay.js';
+export type { CalcDisplayProps } from './CalcDisplay.js';
+export { ScoreDisplay } from './ScoreDisplay.js';
+export type { ScoreDisplayProps } from './ScoreDisplay.js';
+export type { FormSpec, FormPage, FormField, FormFieldBase, FormAccess, FormTheme, FormThankYou, FormSubmitConfig, FormSubmissionPayload, JsonLogicRule, SelectOption, TextField, TextareaField, NumberField, EmailField, PhoneField, SelectField, MultiselectField, CheckboxField, RadioField, DateField, FileField, MatrixField, FormCalculation, FormScoring, ScoringRule, ScoringBucket, FormAction, ActionDo, } from './types.js';
 //# sourceMappingURL=index.d.ts.map

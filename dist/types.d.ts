@@ -161,6 +161,41 @@ export interface FormPrefillConfig {
      */
     submit_behavior: 'append' | 'replace';
 }
+export interface FormCalculation {
+    id: string;
+    label: string;
+    formula: string;
+    hidden?: boolean;
+}
+export interface ScoringRule {
+    if: JsonLogicRule;
+    then: {
+        add: number;
+    } | {
+        set: number;
+    };
+}
+export interface ScoringBucket {
+    min: number;
+    max: number;
+    label: string;
+}
+export interface FormScoring {
+    enabled: boolean;
+    rules: ScoringRule[];
+    buckets?: ScoringBucket[];
+}
+export type ActionDo = {
+    jump_to_page: string;
+} | {
+    skip_pages: string[];
+};
+export interface FormAction {
+    trigger: 'page_exit';
+    page_id: string;
+    if: JsonLogicRule;
+    do: ActionDo;
+}
 export interface FormSpec {
     id: string;
     version: number;
@@ -173,6 +208,9 @@ export interface FormSpec {
     thank_you?: FormThankYou;
     submit?: FormSubmitConfig;
     prefill?: FormPrefillConfig;
+    calculations?: FormCalculation[];
+    scoring?: FormScoring;
+    actions?: FormAction[];
 }
 export type FormSubmissionPayload = Record<string, unknown>;
 //# sourceMappingURL=types.d.ts.map
