@@ -1,0 +1,38 @@
+{
+  "name": "form-renderer",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19",
+    "@mantine/dates": "^9.2.1"
+  },
+  "dependencies": {
+    "@mantine/core": "9.2.1",
+    "@mantine/form": "9.2.1",
+    "react-hook-form": "7.75.0",
+    "@hookform/resolvers": "5.2.2",
+    "json-logic-js": "2.0.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/json-logic-js": "2.0.8"
+  }
+}

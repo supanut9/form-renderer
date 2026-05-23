@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# build output committed for git-dep consumers
+
+# TypeScript
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
