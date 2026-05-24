@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,9 +11,24 @@ import { computeCalculations } from './calc.js';
 import { computeScore } from './scoring.js';
 import { evaluatePageExitActions } from './actions.js';
 import { FormLogicProvider } from './FormLogicContext.js';
-export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = false, mode = 'standalone', }) {
+import { PaymentField } from './paymentField.js';
+export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = false, mode = 'standalone', apiBaseUrl, }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const isPreview = mode === 'preview';
+    // ── Payment state ────────────────────────────────────────────────────────
+    const hasPayment = spec.payment?.required_for_submit === true && spec.payment.mode === 'fixed';
+    const [paymentIntentId, setPaymentIntentId] = useState(null);
+    const [paymentError, setPaymentError] = useState(null);
+    // Warn (non-fatal) when a non-fixed payment mode is requested — the renderer
+    // only handles 'fixed' in this release (L9 scope mirrors L8 scope).
+    useEffect(() => {
+        if (spec.payment?.required_for_submit === true && spec.payment.mode !== 'fixed') {
+            console.warn(`[form-renderer] payment.mode="${spec.payment.mode}" is not yet supported; ` +
+                'only "fixed" is handled in this release. Payment page will be skipped.');
+        }
+        // Warn once per spec version change
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [spec.id, spec.version]);
     const { control, handleSubmit, watch, unregister, trigger, getValues } = useForm({
         defaultValues: defaultValues ?? {},
         mode: 'onBlur',
@@ -62,12 +77,19 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
     const visiblePages = useMemo(() => spec.pages.filter((p) => logic.isPageVisible(p.id)), 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [spec.pages, logic]);
+    /**
+     * Total "virtual" page count includes the synthetic payment page when payment
+     * is required. This is used for progress and navigation guards only.
+     * Index `visiblePages.length` (one past the last real page) is the payment page.
+     */
+    const totalPageCount = hasPayment ? visiblePages.length + 1 : visiblePages.length;
+    const isOnPaymentPage = hasPayment && currentIndex === visiblePages.length;
     // Clamp currentIndex if pages shrink
     useEffect(() => {
-        if (currentIndex >= visiblePages.length && visiblePages.length > 0) {
-            setCurrentIndex(visiblePages.length - 1);
+        if (currentIndex >= totalPageCount && totalPageCount > 0) {
+            setCurrentIndex(totalPageCount - 1);
         }
-    }, [visiblePages.length, currentIndex]);
+    }, [totalPageCount, currentIndex]);
     // Unregister hidden field values so they don't appear in the payload.
     useEffect(() => {
         for (const page of spec.pages) {
@@ -78,13 +100,16 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
             }
         }
     }, [logic, spec.pages, unregister]);
-    const currentPage = visiblePages[currentIndex];
-    const isLastPage = currentIndex === visiblePages.length - 1;
-    const progress = visiblePages.length > 1
-        ? ((currentIndex + 1) / visiblePages.length) * 100
+    const currentPage = visiblePages[currentIndex]; // undefined when on payment page
+    const isLastPage = currentIndex === totalPageCount - 1;
+    const progress = totalPageCount > 1
+        ? ((currentIndex + 1) / totalPageCount) * 100
         : 100;
     // ── Per-page validation ──────────────────────────────────────────────────
-    const currentPageFieldIds = useMemo(() => (currentPage ? currentPage.fields.filter((f) => logic.isFieldVisible(f.id)).map((f) => f.id) : []), [currentPage, logic]);
+    const currentPageFieldIds = useMemo(() => currentPage
+        ? currentPage.fields.filter((f) => logic.isFieldVisible(f.id)).map((f) => f.id)
+        : [], // empty on payment page
+    [currentPage, logic]);
     const allVisibleFieldIds = useMemo(() => {
         const set = new Set();
         for (const p of visiblePages) {
@@ -111,6 +136,10 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
         return idx >= 0 ? idx : Math.min(currentIndex + 1, visiblePages.length - 1);
     }, [visiblePages, currentIndex]);
     const handleNext = useCallback(async () => {
+        // On the payment page there are no form fields to validate; Next is not shown
+        // (Submit button is shown instead), so this should not be reachable.
+        if (isOnPaymentPage)
+            return;
         const values = getValues();
         const parsed = pageSchema.safeParse(values);
         if (!parsed.success) {
@@ -145,6 +174,7 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
         trigger,
         currentPageFieldIds,
         isLastPage,
+        isOnPaymentPage,
         currentPage,
         spec,
         calcResults,
@@ -178,6 +208,10 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
         const fullPayload = parsed.data;
         // Filtered payload for onSpecPayload (visited pages only)
         const filteredPayload = Object.fromEntries(Object.entries(fullPayload).filter(([k]) => visitedFieldIds.has(k)));
+        // Attach payment_intent_id when payment was collected
+        if (hasPayment && paymentIntentId) {
+            filteredPayload['payment_intent_id'] = paymentIntentId;
+        }
         onSpecPayload?.(filteredPayload);
         await onSubmit(filteredPayload);
     }, [
@@ -189,13 +223,15 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
         onSpecPayload,
         spec.pages,
         visitedPageIds,
+        hasPayment,
+        paymentIntentId,
     ]);
     useEffect(() => {
         void resolverRef.current;
     }, [pageSchema]);
     void handleSubmit;
     void zodResolver;
-    if (!currentPage && !isPreview) {
+    if (!currentPage && !isPreview && !isOnPaymentPage) {
         return _jsx(Text, { c: "dimmed", children: "No visible pages." });
     }
     const renderPage = (pageIndex) => {
@@ -205,7 +241,10 @@ export function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled = 
         const visibleFields = page.fields.filter((f) => logic.isFieldVisible(f.id));
         return (_jsxs(Stack, { gap: "md", children: [_jsx(Title, { order: 3, children: page.title }), visibleFields.map((field) => (_jsx(FieldRenderer, { field: field, control: control, disabled: disabled }, field.id)))] }, page.id));
     };
-    return (_jsx(FormLogicProvider, { value: logicContextValue, children: _jsxs("div", { style: { fontFamily: 'var(--form-font, inherit)', ...cssVars }, children: [logoUrl && (_jsx("div", { style: { display: 'flex', justifyContent: 'center', marginBottom: 16 }, children: _jsx("img", { src: logoUrl, alt: `${spec.title} logo`, style: { maxHeight: 48, maxWidth: 240, objectFit: 'contain' } }) })), spec.title && (_jsx(Title, { order: 2, mb: "md", style: { color: 'var(--form-primary, inherit)' }, children: spec.title })), visiblePages.length > 1 && !isPreview && (_jsx(Progress, { value: progress, mb: "md", color: "var(--form-primary, var(--mantine-color-blue-6))" })), _jsx("form", { onSubmit: isLastPage || isPreview ? handleFinalSubmit : handleNext, noValidate: true, children: _jsxs(Stack, { gap: "xl", children: [isPreview
-                                ? visiblePages.map((_, idx) => renderPage(idx))
-                                : renderPage(currentIndex), !isPreview && (_jsxs(Group, { justify: "space-between", mt: "md", children: [currentIndex > 0 ? (_jsx(Button, { variant: "default", onClick: handleBack, disabled: disabled, children: "Back" })) : (_jsx("span", {})), _jsx(Button, { type: "submit", disabled: disabled, color: "var(--form-primary, var(--mantine-color-blue-6))", children: isLastPage ? 'Submit' : 'Next' })] }))] }) })] }) }));
+    // Is the Submit button blocked? On the payment page, require paymentIntentId.
+    const submitBlocked = isOnPaymentPage && !paymentIntentId;
+    return (_jsx(FormLogicProvider, { value: logicContextValue, children: _jsxs("div", { style: { fontFamily: 'var(--form-font, inherit)', ...cssVars }, children: [logoUrl && (_jsx("div", { style: { display: 'flex', justifyContent: 'center', marginBottom: 16 }, children: _jsx("img", { src: logoUrl, alt: `${spec.title} logo`, style: { maxHeight: 48, maxWidth: 240, objectFit: 'contain' } }) })), spec.title && (_jsx(Title, { order: 2, mb: "md", style: { color: 'var(--form-primary, inherit)' }, children: spec.title })), totalPageCount > 1 && !isPreview && (_jsx(Progress, { value: progress, mb: "md", color: "var(--form-primary, var(--mantine-color-blue-6))" })), _jsx("form", { onSubmit: isLastPage || isPreview ? handleFinalSubmit : handleNext, noValidate: true, children: _jsxs(Stack, { gap: "xl", children: [isPreview ? (_jsxs(_Fragment, { children: [visiblePages.map((_, idx) => renderPage(idx)), hasPayment && spec.payment && (_jsx(PaymentField, { formSlug: spec.id, currency: spec.payment.currency, amountMinor: spec.payment.amount_minor ?? 0, onPaymentReady: setPaymentIntentId, onError: setPaymentError, apiBaseUrl: apiBaseUrl }))] })) : isOnPaymentPage && spec.payment ? (_jsxs(Stack, { gap: "md", children: [_jsx(Title, { order: 3, children: "Payment" }), paymentError && (_jsx(Text, { c: "red", size: "sm", children: paymentError })), _jsx(PaymentField, { formSlug: spec.id, currency: spec.payment.currency, amountMinor: spec.payment.amount_minor ?? 0, onPaymentReady: (id) => {
+                                            setPaymentIntentId(id);
+                                            setPaymentError(null);
+                                        }, onError: setPaymentError, apiBaseUrl: apiBaseUrl })] })) : (renderPage(currentIndex)), !isPreview && (_jsxs(Group, { justify: "space-between", mt: "md", children: [currentIndex > 0 ? (_jsx(Button, { variant: "default", onClick: handleBack, disabled: disabled, children: "Back" })) : (_jsx("span", {})), _jsx(Button, { type: "submit", disabled: disabled || submitBlocked, color: "var(--form-primary, var(--mantine-color-blue-6))", children: isLastPage ? 'Submit' : 'Next' })] }))] }) })] }) }));
 }

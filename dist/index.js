@@ -15,3 +15,5 @@ export { evaluatePageExitActions } from './actions.js';
 export { FormLogicProvider, FormLogicContext, useFormLogic } from './FormLogicContext.js';
 export { CalcDisplay } from './CalcDisplay.js';
 export { ScoreDisplay } from './ScoreDisplay.js';
+// Phase 3B — Payment block (context-injection pattern; Stripe-free)
+export { PaymentField, PaymentBlockHostInjectionContext } from './paymentField.js';

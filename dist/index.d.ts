@@ -19,5 +19,7 @@ export { CalcDisplay } from './CalcDisplay.js';
 export type { CalcDisplayProps } from './CalcDisplay.js';
 export { ScoreDisplay } from './ScoreDisplay.js';
 export type { ScoreDisplayProps } from './ScoreDisplay.js';
-export type { FormSpec, FormPage, FormField, FormFieldBase, FormAccess, FormTheme, FormThankYou, FormSubmitConfig, FormSubmissionPayload, JsonLogicRule, SelectOption, TextField, TextareaField, NumberField, EmailField, PhoneField, SelectField, MultiselectField, CheckboxField, RadioField, DateField, FileField, MatrixField, FormCalculation, FormScoring, ScoringRule, ScoringBucket, FormAction, ActionDo, } from './types.js';
+export { PaymentField, PaymentBlockHostInjectionContext } from './paymentField.js';
+export type { PaymentFieldProps, PaymentBlockComponentProps } from './paymentField.js';
+export type { FormSpec, FormPage, FormField, FormFieldBase, FormAccess, FormTheme, FormThankYou, FormSubmitConfig, FormSubmissionPayload, JsonLogicRule, SelectOption, TextField, TextareaField, NumberField, EmailField, PhoneField, SelectField, MultiselectField, CheckboxField, RadioField, DateField, FileField, MatrixField, FormCalculation, FormScoring, ScoringRule, ScoringBucket, FormAction, ActionDo, FormPayment, } from './types.js';
 //# sourceMappingURL=index.d.ts.map

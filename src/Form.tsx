@@ -13,6 +13,7 @@ import { computeScore } from './scoring.js'
 import type { ScoreResult } from './scoring.js'
 import { evaluatePageExitActions } from './actions.js'
 import { FormLogicProvider } from './FormLogicContext.js'
+import { PaymentField } from './paymentField.js'
 
 export interface FormProps {
   spec: FormSpec
@@ -26,6 +27,8 @@ export interface FormProps {
   onSpecPayload?: (payload: FormSubmissionPayload) => void
   disabled?: boolean
   mode?: 'standalone' | 'embed' | 'preview'
+  /** Optional base URL forwarded to the injected payment component. */
+  apiBaseUrl?: string
 }
 
 export function Form({
@@ -35,9 +38,29 @@ export function Form({
   onSpecPayload,
   disabled = false,
   mode = 'standalone',
+  apiBaseUrl,
 }: FormProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const isPreview = mode === 'preview'
+
+  // ── Payment state ────────────────────────────────────────────────────────
+  const hasPayment =
+    spec.payment?.required_for_submit === true && spec.payment.mode === 'fixed'
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+
+  // Warn (non-fatal) when a non-fixed payment mode is requested — the renderer
+  // only handles 'fixed' in this release (L9 scope mirrors L8 scope).
+  useEffect(() => {
+    if (spec.payment?.required_for_submit === true && spec.payment.mode !== 'fixed') {
+      console.warn(
+        `[form-renderer] payment.mode="${spec.payment.mode}" is not yet supported; ` +
+        'only "fixed" is handled in this release. Payment page will be skipped.',
+      )
+    }
+    // Warn once per spec version change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spec.id, spec.version])
 
   const { control, handleSubmit, watch, unregister, trigger, getValues } = useForm({
     defaultValues: defaultValues ?? {},
@@ -100,12 +123,20 @@ export function Form({
     [spec.pages, logic],
   )
 
+  /**
+   * Total "virtual" page count includes the synthetic payment page when payment
+   * is required. This is used for progress and navigation guards only.
+   * Index `visiblePages.length` (one past the last real page) is the payment page.
+   */
+  const totalPageCount = hasPayment ? visiblePages.length + 1 : visiblePages.length
+  const isOnPaymentPage = hasPayment && currentIndex === visiblePages.length
+
   // Clamp currentIndex if pages shrink
   useEffect(() => {
-    if (currentIndex >= visiblePages.length && visiblePages.length > 0) {
-      setCurrentIndex(visiblePages.length - 1)
+    if (currentIndex >= totalPageCount && totalPageCount > 0) {
+      setCurrentIndex(totalPageCount - 1)
     }
-  }, [visiblePages.length, currentIndex])
+  }, [totalPageCount, currentIndex])
 
   // Unregister hidden field values so they don't appear in the payload.
   useEffect(() => {
@@ -118,16 +149,19 @@ export function Form({
     }
   }, [logic, spec.pages, unregister])
 
-  const currentPage = visiblePages[currentIndex]
-  const isLastPage = currentIndex === visiblePages.length - 1
+  const currentPage = visiblePages[currentIndex] // undefined when on payment page
+  const isLastPage = currentIndex === totalPageCount - 1
   const progress =
-    visiblePages.length > 1
-      ? ((currentIndex + 1) / visiblePages.length) * 100
+    totalPageCount > 1
+      ? ((currentIndex + 1) / totalPageCount) * 100
       : 100
 
   // ── Per-page validation ──────────────────────────────────────────────────
   const currentPageFieldIds = useMemo(
-    () => (currentPage ? currentPage.fields.filter((f) => logic.isFieldVisible(f.id)).map((f) => f.id) : []),
+    () =>
+      currentPage
+        ? currentPage.fields.filter((f) => logic.isFieldVisible(f.id)).map((f) => f.id)
+        : [], // empty on payment page
     [currentPage, logic],
   )
 
@@ -171,6 +205,10 @@ export function Form({
   )
 
   const handleNext = useCallback(async () => {
+    // On the payment page there are no form fields to validate; Next is not shown
+    // (Submit button is shown instead), so this should not be reachable.
+    if (isOnPaymentPage) return
+
     const values = getValues()
     const parsed = pageSchema.safeParse(values)
     if (!parsed.success) {
@@ -212,6 +250,7 @@ export function Form({
     trigger,
     currentPageFieldIds,
     isLastPage,
+    isOnPaymentPage,
     currentPage,
     spec,
     calcResults,
@@ -252,6 +291,11 @@ export function Form({
       Object.entries(fullPayload).filter(([k]) => visitedFieldIds.has(k)),
     )
 
+    // Attach payment_intent_id when payment was collected
+    if (hasPayment && paymentIntentId) {
+      filteredPayload['payment_intent_id'] = paymentIntentId
+    }
+
     onSpecPayload?.(filteredPayload)
     await onSubmit(filteredPayload)
   }, [
@@ -263,6 +307,8 @@ export function Form({
     onSpecPayload,
     spec.pages,
     visitedPageIds,
+    hasPayment,
+    paymentIntentId,
   ])
 
   useEffect(() => {
@@ -271,7 +317,7 @@ export function Form({
   void handleSubmit
   void zodResolver
 
-  if (!currentPage && !isPreview) {
+  if (!currentPage && !isPreview && !isOnPaymentPage) {
     return <Text c="dimmed">No visible pages.</Text>
   }
 
@@ -295,6 +341,9 @@ export function Form({
     )
   }
 
+  // Is the Submit button blocked? On the payment page, require paymentIntentId.
+  const submitBlocked = isOnPaymentPage && !paymentIntentId
+
   return (
     <FormLogicProvider value={logicContextValue}>
       <div style={{ fontFamily: 'var(--form-font, inherit)', ...cssVars }}>
@@ -313,7 +362,7 @@ export function Form({
             {spec.title}
           </Title>
         )}
-        {visiblePages.length > 1 && !isPreview && (
+        {totalPageCount > 1 && !isPreview && (
           <Progress value={progress} mb="md" color="var(--form-primary, var(--mantine-color-blue-6))" />
         )}
 
@@ -322,9 +371,43 @@ export function Form({
           noValidate
         >
           <Stack gap="xl">
-            {isPreview
-              ? visiblePages.map((_, idx) => renderPage(idx))
-              : renderPage(currentIndex)}
+            {isPreview ? (
+              <>
+                {visiblePages.map((_, idx) => renderPage(idx))}
+                {hasPayment && spec.payment && (
+                  <PaymentField
+                    formSlug={spec.id}
+                    currency={spec.payment.currency}
+                    amountMinor={spec.payment.amount_minor ?? 0}
+                    onPaymentReady={setPaymentIntentId}
+                    onError={setPaymentError}
+                    apiBaseUrl={apiBaseUrl}
+                  />
+                )}
+              </>
+            ) : isOnPaymentPage && spec.payment ? (
+              <Stack gap="md">
+                <Title order={3}>Payment</Title>
+                {paymentError && (
+                  <Text c="red" size="sm">
+                    {paymentError}
+                  </Text>
+                )}
+                <PaymentField
+                  formSlug={spec.id}
+                  currency={spec.payment.currency}
+                  amountMinor={spec.payment.amount_minor ?? 0}
+                  onPaymentReady={(id) => {
+                    setPaymentIntentId(id)
+                    setPaymentError(null)
+                  }}
+                  onError={setPaymentError}
+                  apiBaseUrl={apiBaseUrl}
+                />
+              </Stack>
+            ) : (
+              renderPage(currentIndex)
+            )}
 
             {!isPreview && (
               <Group justify="space-between" mt="md">
@@ -338,7 +421,7 @@ export function Form({
 
                 <Button
                   type="submit"
-                  disabled={disabled}
+                  disabled={disabled || submitBlocked}
                   color="var(--form-primary, var(--mantine-color-blue-6))"
                 >
                   {isLastPage ? 'Submit' : 'Next'}

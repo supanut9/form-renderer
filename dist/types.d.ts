@@ -196,6 +196,16 @@ export interface FormAction {
     if: JsonLogicRule;
     do: ActionDo;
 }
+export interface FormPayment {
+    mode: 'fixed' | 'calculated' | 'tier';
+    currency: string;
+    amount_minor?: number;
+    amount_formula?: string;
+    tiers?: unknown[];
+    capture_intent: 'on_submit' | 'manual';
+    stripe_account_id?: string;
+    required_for_submit: boolean;
+}
 export interface FormSpec {
     id: string;
     version: number;
@@ -211,6 +221,7 @@ export interface FormSpec {
     calculations?: FormCalculation[];
     scoring?: FormScoring;
     actions?: FormAction[];
+    payment?: FormPayment;
 }
 export type FormSubmissionPayload = Record<string, unknown>;
 //# sourceMappingURL=types.d.ts.map

@@ -11,6 +11,8 @@ export interface FormProps {
     onSpecPayload?: (payload: FormSubmissionPayload) => void;
     disabled?: boolean;
     mode?: 'standalone' | 'embed' | 'preview';
+    /** Optional base URL forwarded to the injected payment component. */
+    apiBaseUrl?: string;
 }
-export declare function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled, mode, }: FormProps): import("react/jsx-runtime").JSX.Element;
+export declare function Form({ spec, defaultValues, onSubmit, onSpecPayload, disabled, mode, apiBaseUrl, }: FormProps): import("react/jsx-runtime").JSX.Element;
 //# sourceMappingURL=Form.d.ts.map

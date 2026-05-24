@@ -235,6 +235,18 @@ export interface FormAction {
   do: ActionDo
 }
 
+// ── Phase 3B — Payment ────────────────────────────────────────────────────────
+export interface FormPayment {
+  mode: 'fixed' | 'calculated' | 'tier'
+  currency: string
+  amount_minor?: number
+  amount_formula?: string
+  tiers?: unknown[]
+  capture_intent: 'on_submit' | 'manual'
+  stripe_account_id?: string
+  required_for_submit: boolean
+}
+
 // ── FormSpec (root document) ──────────────────────────────────────────────────
 export interface FormSpec {
   id: string
@@ -252,6 +264,8 @@ export interface FormSpec {
   calculations?: FormCalculation[]
   scoring?: FormScoring
   actions?: FormAction[]
+  // Phase 3B extension
+  payment?: FormPayment
 }
 
 // ── Submission ────────────────────────────────────────────────────────────────

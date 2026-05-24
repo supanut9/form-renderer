@@ -35,6 +35,10 @@ export type { CalcDisplayProps } from './CalcDisplay.js'
 export { ScoreDisplay } from './ScoreDisplay.js'
 export type { ScoreDisplayProps } from './ScoreDisplay.js'
 
+// Phase 3B — Payment block (context-injection pattern; Stripe-free)
+export { PaymentField, PaymentBlockHostInjectionContext } from './paymentField.js'
+export type { PaymentFieldProps, PaymentBlockComponentProps } from './paymentField.js'
+
 export type {
   FormSpec,
   FormPage,
@@ -66,4 +70,6 @@ export type {
   ScoringBucket,
   FormAction,
   ActionDo,
+  // Phase 3B type extensions
+  FormPayment,
 } from './types.js'
